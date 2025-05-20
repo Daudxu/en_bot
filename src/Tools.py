@@ -92,6 +92,21 @@ def word_example(word: str) -> str:
     """返回该单词的例句"""
     return f"{word} 的例句是..."
 
+@tool
+def word_collocation(word: str) -> str:
+    """返回该单词的固定搭配"""
+    return f"{word} 的固定搭配有..."
+
+@tool
+def word_affix(word: str) -> str:
+    """返回该单词的词根词缀分析"""
+    return f"{word} 的词根词缀分析..."
+
+@tool
+def word_quiz(word: str) -> str:
+    """返回该单词的选择题"""
+    return f"关于 {word} 的选择题如下..."
+
 # 初始化配置
 class Config:
     def __init__(self):

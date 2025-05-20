@@ -32,6 +32,9 @@ def main():
         add_user("userid", userid)
         logger.info(f"用户{userid}已添加到存储中")
         agent = AgentClass()
+
+        msg = agent.run_agent("apple")
+        print("助手：", msg.get("output", msg))
         while True:
             user_input = input("你：")
             if user_input.lower() in ["exit", "quit", "q"]:
