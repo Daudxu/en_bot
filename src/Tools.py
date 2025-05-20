@@ -84,6 +84,7 @@ def get_info_from_local(query: str) -> str:
 @tool
 def word_usage(word: str) -> str:
     """返回该单词的详细用法"""
+    print("-------RAG- word_usage------------")
     # 这里可以查数据库、查API或写死规则
     return f"{word} 的详细用法是..."
 

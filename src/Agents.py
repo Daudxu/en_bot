@@ -9,7 +9,7 @@ from langchain_core.caches import InMemoryCache  # 内存缓存，用于加速�
 from .Storage import get_user  # 获取用户信息的函数
 
 # 导入各种工具函数
-from .Tools import search,get_info_from_local
+from .Tools import search,get_info_from_local,word_usage,word_example,word_collocation,word_affix,word_quiz
 from dotenv import load_dotenv as _load_dotenv
 _load_dotenv()
 import os
@@ -48,7 +48,7 @@ class AgentClass:
         self.chatmodel = ChatOpenAI(model=self.modelname).with_fallbacks([fallback_llm])
         
         # 设置可用的工具列表，这些工具可以被AI代理调用
-        self.tools = [search,get_info_from_local]
+        self.tools = [search,get_info_from_local,word_usage,word_example,word_collocation,word_affix,word_quiz]
         
         # 从环境变量获取记忆键名
         self.memorykey = os.getenv("MEMORY_KEY")
@@ -84,16 +84,18 @@ class AgentClass:
         返回:
             包含AI回复的字典
         """
-        # 直接使用prompt和memory，不再做情感分析
         self.prompt = PromptClass(memorykey=self.memorykey).Prompt_Structure()
         print("self.prompt", self.prompt)
-        
-        # 运行代理链，处理用户输入
-        # 根据当前用户ID设置对应的记忆
-        res = self.agent_chain.with_config({
+        config = {
             "agent_memory": self.memory.set_memory(session_id=get_user("userid"))
-        }).invoke(
-            {"input": input}  # 传入用户输入
-        )
-        return res  # 返回代理处理结果
+        }
+        # 尝试流式
+        if hasattr(self.agent_chain, "stream"):
+            # 流式返回
+            for chunk in self.agent_chain.with_config(config).stream({"input": input}):
+                yield chunk.get("output", str(chunk))
+        else:
+            # 一次性返回
+            res = self.agent_chain.with_config(config).invoke({"input": input})
+            return res
 

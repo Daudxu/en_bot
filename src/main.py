@@ -34,16 +34,27 @@ def main():
         agent = AgentClass()
 
         msg = agent.run_agent("apple")
-        print("助手：", msg.get("output", msg))
+        print("助手：", end="", flush=True)
+        if hasattr(msg, '__iter__') and not isinstance(msg, dict):
+            # 如果 run_agent 支持流式生成器
+            for chunk in msg:
+                print(chunk, end="", flush=True)
+            print()
+        else:
+            print(msg.get("output", msg))
         while True:
             user_input = input("你：")
             if user_input.lower() in ["exit", "quit", "q"]:
                 print("结束会话。")
                 break
             msg = agent.run_agent(user_input)
-            # 只输出助手回复内容
-            print("助手：", msg.get("output", msg))
-            # logger.info(msg)
+            print("助手：", end="", flush=True)
+            if hasattr(msg, '__iter__') and not isinstance(msg, dict):
+                for chunk in msg:
+                    print(chunk, end="", flush=True)
+                print()
+            else:
+                print(msg.get("output", msg))
     except Exception as e:
         logger.error(f"连接服务器时出错: {e}", exc_info=True)
 
