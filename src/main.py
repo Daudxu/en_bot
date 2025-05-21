@@ -33,21 +33,32 @@ def main():
         logger.info(f"用户{userid}已添加到存储中")
         agent = AgentClass()
 
-        msg = agent.run_agent("apple")
+        # 新增：首次进入时自动传一个单词，但 input 只传空字符串，确保只输出欢迎语
+        initial_word = "boy"
+        msg = agent.run_agent("", world=initial_word)
         print("助手：", end="", flush=True)
         if hasattr(msg, '__iter__') and not isinstance(msg, dict):
-            # 如果 run_agent 支持流式生成器
             for chunk in msg:
                 print(chunk, end="", flush=True)
             print()
         else:
             print(msg.get("output", msg))
+        current_word = initial_word
+        first_input = True
         while True:
             user_input = input("你：")
             if user_input.lower() in ["exit", "quit", "q"]:
                 print("结束会话。")
                 break
-            msg = agent.run_agent(user_input)
+            # 判断用户输入是否为英文单词（简单判断）
+            if user_input.isalpha():
+                current_word = user_input
+            # 首次输入单词时，查释义，否则正常走 agent
+            if first_input and user_input == initial_word:
+                msg = agent.run_agent(user_input, world=current_word)
+                first_input = False
+            else:
+                msg = agent.run_agent(user_input, world=current_word)
             print("助手：", end="", flush=True)
             if hasattr(msg, '__iter__') and not isinstance(msg, dict):
                 for chunk in msg:

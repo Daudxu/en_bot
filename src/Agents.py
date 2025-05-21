@@ -37,7 +37,7 @@ class AgentClass:
     AI代理类，负责处理用户输入并生成回复
     整合了语言模型、记忆系统和各种工具功能
     """
-    def __init__(self):
+    def __init__(self, world=None):
         # 设置备用模型，当主模型不可用时使用
         fallback_llm = ChatDeepSeek(model=os.getenv("BACKUP_MODEL"))
         
@@ -54,7 +54,7 @@ class AgentClass:
         self.memorykey = os.getenv("MEMORY_KEY")
         
         # 创建提示词结构
-        self.prompt = PromptClass(memorykey=self.memorykey).Prompt_Structure()
+        self.prompt = PromptClass(memorykey=self.memorykey).Prompt_Structure(world=world)
         
         # 初始化记忆系统
         self.memory = MemoryClass(memorykey=self.memorykey,model=self.modelname)
@@ -74,28 +74,35 @@ class AgentClass:
             verbose=True  # 启用详细输出，便于调试
         )
 
-    def run_agent(self, input):
+    def run_agent(self, input, world=None):
         """
         运行AI代理处理用户输入
-        
         参数:
             input: 用户输入的文本
-            
+            world: 当前单词（可选，切换时用）
         返回:
-            包含AI回复的字典
+            包含AI回复的字典或流式生成器
         """
-        self.prompt = PromptClass(memorykey=self.memorykey).Prompt_Structure()
-        print("self.prompt", self.prompt)
+        # 每次都用最新 world 构建 prompt 和 agent_chain
+        self.prompt = PromptClass(memorykey=self.memorykey).Prompt_Structure(world=world)
+        self.agent = create_tool_calling_agent(
+            self.chatmodel,
+            self.tools,
+            self.prompt,
+        )
+        self.agent_chain = AgentExecutor(
+            agent=self.agent,
+            tools=self.tools,
+            memory=self.memory.set_memory(),
+            verbose=True
+        )
         config = {
             "agent_memory": self.memory.set_memory(session_id=get_user("userid"))
         }
-        # 尝试流式
         if hasattr(self.agent_chain, "stream"):
-            # 流式返回
             for chunk in self.agent_chain.with_config(config).stream({"input": input}):
                 yield chunk.get("output", str(chunk))
         else:
-            # 一次性返回
             res = self.agent_chain.with_config(config).invoke({"input": input})
             return res
 
