@@ -1,0 +1,103 @@
+import uuid
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Memory import MemoryClass
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from dotenv import load_dotenv
+import os
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+# 1. 加载环境变量
+load_dotenv()
+
+# 2. 创建 FastAPI 应用
+app = FastAPI()
+
+
+base_url = os.getenv("BASE_URL")
+model_api_key = os.getenv("MODEL_API_KEY")
+model_name = os.getenv("MODEL_NAME")
+
+llm = ChatOpenAI(
+    base_url=base_url,
+    api_key=model_api_key,
+    model=model_name,
+    temperature=0.1,
+    max_tokens=512,
+    streaming=True
+)
+
+# 3. 聊天历史管理，使用 MemoryClass 统一管理
+memory_manager = MemoryClass()
+
+def get_chat_history(session_id: str):
+    # 强制用 RedisChatMessageHistory，确保历史存入 redis
+    memory = memory_manager.set_memory(session_id=session_id)
+    # 兼容 LCEL chain，返回 .chat_memory.messages（RedisChatMessageHistory）
+    if hasattr(memory, 'chat_memory') and hasattr(memory.chat_memory, 'messages'):
+        # 打印调试，确认类型
+        # print('chat_memory type:', type(memory.chat_memory))
+        return memory.chat_memory.messages
+    elif hasattr(memory, 'messages'):
+        return memory.messages
+    else:
+        return []
+
+# 4. LLM 配置，支持 OpenAI 兼容模型
+
+
+
+# 5. Prompt 模板，支持动态单词
+SYSTEM_PROMPT_TEMPLATE = '''你是一个助手'''
+
+# 6. 构建 LCEL Prompt
+prompt = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_PROMPT_TEMPLATE),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("user", "{input}"),
+])
+
+# 7. 构建 LCEL Chain，自动注入历史
+chain = (
+    RunnablePassthrough.assign(
+        chat_history=lambda x: get_chat_history(x["session_id"])
+    )
+    | prompt.partial(word="apple")
+    | llm
+    | StrOutputParser()
+)
+
+# 8. FastAPI WebSocket 端点，支持多 session 聊天
+@app.websocket("/ws/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    session_id = str(uuid.uuid4())
+    word = "apple"
+    try:
+        init = await websocket.receive_text()
+        if init.strip():
+            word = init.strip()
+    except Exception:
+        pass
+    # 首次进入，发送欢迎语
+    result = chain.invoke({"input": "", "session_id": session_id})
+    await websocket.send_text(result)
+    await websocket.send_text("[END]")
+    try:
+        while True:
+            user_input = await websocket.receive_text()
+            if user_input.lower() in ["exit", "quit", "q"]:
+                await websocket.close()
+                if hasattr(memory_manager, 'clear'):
+                    memory_manager.clear(session_id)
+                return
+            result = chain.invoke({"input": user_input, "session_id": session_id})
+            await websocket.send_text(result)
+            await websocket.send_text("[END]")
+    except WebSocketDisconnect:
+        if hasattr(memory_manager, 'clear'):
+            memory_manager.clear(session_id)
+        pass

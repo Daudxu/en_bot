@@ -10,12 +10,23 @@ import os
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 # print(f"Redis URL: {redis_url}")
 
+base_url = os.getenv("BASE_URL")
+model_api_key = os.getenv("MODEL_API_KEY")
+model_name = os.getenv("MODEL_NAME")
+
 
 class MemoryClass:
-    def __init__(self, memorykey="chat_history", model=os.getenv("BASE_MODEL")):
+    def __init__(self, memorykey="chat_history"):
         self.memorykey = memorykey
         self.memory = []
-        self.chatmodel = ChatOpenAI(model=model)
+        self.chatmodel = ChatOpenAI(
+               base_url=base_url,
+                api_key=model_api_key,
+                model=model_name,
+                temperature=0.1,
+                max_tokens=512,
+                streaming=True
+        )
 
     def summary_chain(self, store_message):
         try:
@@ -47,7 +58,7 @@ class MemoryClass:
                 summary = self.summary_chain(str_message)
                 chat_message_history.clear()  # 清空原有的对话
                 chat_message_history.add_message(summary)  # 保存总结
-                print("添加总结后:", chat_message_history.messages)
+                # print("添加总结后:", chat_message_history.messages)
                 return chat_message_history
             else:
                 print("go to next step")
@@ -66,7 +77,7 @@ class MemoryClass:
         self.memory = ConversationBufferMemory(
             llm=self.chatmodel,
             human_prefix="user",
-            ai_prefix="小小助手",
+            ai_prefix="小英老师",
             memory_key=self.memorykey,
             output_key="output",
             return_messages=True,
